@@ -8,42 +8,72 @@ st.set_page_config(
     page_icon="🚢"
 )
 
+# Load saved dictionary
 @st.cache_resource
-def load_model():
+def load_package():
     return joblib.load("titanic_model.pkl")
 
-model = load_model()
+package = load_package()
 
-st.title("Titanic Passenger Survival Prediction")
+# Extract trained model and encoders
+model = package["model"]
+encoders = package["encoders"]
+features = package["features"]
+
+st.title("🚢 Titanic Survival Prediction")
 st.write("Enter passenger details to predict survival.")
 
-pclass = st.selectbox("Passenger Class", [1, 2, 3])
-sex = st.selectbox("Gender", ["male", "female"])
-age = st.number_input("Age", min_value=0, max_value=100, value=25)
-sibsp = st.number_input("Siblings/Spouses Aboard", min_value=0, max_value=10, value=0)
-parch = st.number_input("Parents/Children Aboard", min_value=0, max_value=10, value=0)
-fare = st.number_input("Ticket Fare", min_value=0.0, value=32.0)
-embarked = st.selectbox("Port of Embarkation", ["S", "C", "Q"])
+# Input fields must match the trained model's categories
+pclass = st.selectbox(
+    "Passenger Class",
+    ["First", "Second", "Third"]
+)
+
+gender = st.selectbox(
+    "Gender",
+    ["Female", "Male"]
+)
+
+sibling = st.selectbox(
+    "Number of Siblings",
+    ["Zero", "One", "Two", "Three"]
+)
+
+embarked = st.selectbox(
+    "Port of Embarkation",
+    ["Southampton", "Queenstown", "Cherbourg"]
+)
 
 if st.button("Predict Survival"):
-    passenger = pd.DataFrame([{
-        "pclass": pclass,
-        "sex": sex,
-        "age": age,
-        "sibsp": sibsp,
-        "parch": parch,
-        "fare": fare,
-        "embarked": embarked
-    }])
 
-    try:
-        prediction = model.predict(passenger)[0]
+    input_values = {
+        "PClass": pclass,
+        "Gender": gender,
+        "Sibling": sibling,
+        "Embarked": embarked
+    }
 
-        if prediction == 1:
-            st.success("Prediction: Passenger Survived!")
-        else:
-            st.error("Prediction: Passenger Did Not Survive!")
+    # Encode inputs using the saved encoders
+    encoded_values = {}
 
-    except Exception as e:
-        st.error("Input format does not match the trained model.")
-        st.write(str(e))
+    for column, value in input_values.items():
+        encoded_values[column] = encoders[column].transform([value])[0]
+
+    # Arrange features in the same order used during training
+    input_df = pd.DataFrame(
+        [[encoded_values[column] for column in features]],
+        columns=features
+    )
+
+    # Predict using the actual trained model
+    prediction = model.predict(input_df)[0]
+
+    # Convert prediction back to its original label
+    result = encoders["Survived"].inverse_transform(
+        [int(prediction)]
+    )[0]
+
+    if result == "Yes":
+        st.success("Prediction: Passenger Survived! 🎉")
+    else:
+        st.error("Prediction: Passenger Did Not Survive.")
